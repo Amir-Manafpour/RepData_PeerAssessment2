@@ -1,0 +1,68 @@
+---
+title: "Analysis of impact of severe weather events on population health and economic consequences"
+author: "Amir Manafpour"
+date: "May 21, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(reshape2)
+library(ggplot2)
+```
+
+## Synopsis
+Summarize article analysis here
+
+## Data Processing
+The data loading process below assumes that the raw zipped data file "repdata%2Fdata%2FStormData.csv.bz2" exists in a folder called "Data Files" in the current working directory. The code then unzips and reads the data.
+
+``` {r dataimport, cache = TRUE}
+mydata <- read.csv("./Data Files/repdata%2Fdata%2FStormData.csv.bz2")
+```
+
+## Results
+The top 10 events that result in injuries and the top 10 events that result in fatalities are summarized in the graph below. Note: ??? of these events overlap for each category but ??? are unique and do not belong in both categories of top 10s.
+
+There are several similar categories for event types and so they have been aggregated as follows:
+
+"CURRENT": ALL EVTYPES CONTAINING THE WORD "CURRENT"
+"HAIL WIND": ALL EVTYPES CONTAINING THE WORD "WIND" OR "HAIL"
+"FLOOD": ALL EVTYPES CONTAINING THE WORD "FLOOD"
+"HEAT": ALL EVTYPES CONTAINING THE WORD "HEAT"
+"ICE": ALL EVTYPES CONTAINING THE WORD "ICE"
+
+Note: The total injuries for the "TORNADO" category was 91,346. This value would have truncated the graph below and so the y-axis has been limited to numbers between 0 and 7500.
+
+``` {r analysis}
+condenseddata <- mydata %>%
+  mutate(EVTYPE = ifelse(grep("\\bcurrent\\b", EVTYPE, ignore.case = TRUE), "CURRENT", EVTYPE))
+
+casualty_sums <- condenseddata %>%
+  group_by(EVTYPE) %>%
+  summarize(total_injuries = sum(INJURIES), total_fatalities = sum(FATALITIES))
+
+sorted_byinjury <- casualty_sums %>% arrange(desc(total_injuries))
+sorted_byfatality <- casualty_sums %>% arrange(desc(total_fatalities))
+
+top10injuries <- sorted_byinjury$EVTYPE[1:10]
+top10fatalities <- sorted_byfatality$EVTYPE[1:10]
+top10both <- unique(c(as.character(top10fatalities), as.character(top10injuries)))
+
+subset <- casualty_sums[which(casualty_sums$EVTYPE %in% top10both),]
+meltedsubset <- melt(subset)
+
+g <- ggplot(meltedsubset, aes(x = reorder(EVTYPE, value), y= value, fill = variable), xlab="Event Type") +
+  geom_bar(stat="identity", width=.5, position = "dodge") +
+  coord_cartesian(ylim=c(0, 7500)) +
+  ggtitle("Most harmful events") +
+  ylab("Number of people") +
+  xlab("Event Type") +
+  scale_fill_discrete(name = "Casualty Type", labels = c("Total Injuries", "Total Fatalities")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  scale_y_continuous(breaks = seq(0,7500,1000))
+
+```
+
