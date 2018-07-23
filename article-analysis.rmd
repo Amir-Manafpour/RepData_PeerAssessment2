@@ -1,5 +1,5 @@
 ---
-title: "Analysis of impact of severe weather events on population health and economic consequences"
+title: "Impact of severe weather events on population health and economic consequences"
 author: "Amir Manafpour"
 date: "May 21, 2018"
 output: html_document
@@ -13,36 +13,61 @@ library(ggplot2)
 ```
 
 ## Synopsis
-Summarize article analysis here
+This study represents the most damaging weather events based on the dataset provided by U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. The same event types had similar but mismatching names and so the data processing of this study invovled combining and aggregating the same event types with different names. The graphs at the end of this article represent the top 10 event types for the number of injuries/fatalities as well as the amount of economical damage that resulted from each event type. The graphs show that Tornados cause the most amount of injuries/fatailities (several times that of the next event type "Wind"). Also, Floods were found to cause the most amount of economical damage compared to all other event types.
 
 ## Data Processing
-The data loading process below assumes that the raw zipped data file "repdata%2Fdata%2FStormData.csv.bz2" exists in a folder called "Data Files" in the current working directory. The code then unzips and reads the data.
+The data loading process below assumes that the raw zipped data file "repdata%2Fdata%2FStormData.csv.bz2" exists in a folder called "Data Files" in the current working directory.
 
 ``` {r dataimport, cache = TRUE}
+setwd("C:/Users/amirman121/Documents/Coursera/RepData")
 mydata <- read.csv("./Data Files/repdata%2Fdata%2FStormData.csv.bz2")
 ```
 
-## Results
-The top 10 events that result in injuries and the top 10 events that result in fatalities are summarized in the graph below. Note: ??? of these events overlap for each category but ??? are unique and do not belong in both categories of top 10s.
-
 There are several similar categories for event types and so they have been aggregated as follows:
 
-"CURRENT": ALL EVTYPES CONTAINING THE WORD "CURRENT"
-"HAIL WIND": ALL EVTYPES CONTAINING THE WORD "WIND" OR "HAIL"
-"FLOOD": ALL EVTYPES CONTAINING THE WORD "FLOOD"
 "HEAT": ALL EVTYPES CONTAINING THE WORD "HEAT"
-"ICE": ALL EVTYPES CONTAINING THE WORD "ICE"
 
-Note: The total injuries for the "TORNADO" category was 91,346. This value would have truncated the graph below and so the y-axis has been limited to numbers between 0 and 7500.
+"TORNADO": ALL EVTYPES CONTAINING THE WORD "TORNADO"
 
-``` {r analysis}
+"HURRICANE": ALL EVTYPES CONTAINING THE WORD "HURRICANE"
+
+"CURRENT": ALL EVTYPES CONTAINING THE WORD "CURRENT"
+
+"LIGHTNING": ALL EVTYPES CONTAINING THE WORD "LIGHTNING"
+
+"HAIL": ALL EVTYPES CONTAINING THE WORD "HAIL"
+
+"WIND": ALL EVTYPES CONTAINING THE WORD "WIND"
+
+"ICE/SNOW": ALL EVTYPES CONTAINING THE WORD "ICE" OR "SNOW" OR "WINTER"
+
+"FLOOD": ALL EVTYPES CONTAINING THE WORD "FLOOD"
+
+"STORM": ALL EVTYPES CONTAINING THE WORD "STORM"
+
+``` {r data-processing}
+#First combine similar categories into one
+mydata$EVTYPE <- as.character(mydata$EVTYPE)
 condenseddata <- mydata %>%
-  mutate(EVTYPE = ifelse(grep("\\bcurrent\\b", EVTYPE, ignore.case = TRUE), "CURRENT", EVTYPE))
+  mutate(EVTYPE = ifelse(grepl("\\bheat\\b", EVTYPE, ignore.case = TRUE), "HEAT", EVTYPE)) %>%
+  mutate(EVTYPE = ifelse(grepl("\\btornado\\b", EVTYPE, ignore.case = TRUE), "TORNADO", EVTYPE)) %>%
+  mutate(EVTYPE = ifelse(grepl("\\bhurricane\\b", EVTYPE, ignore.case = TRUE), "HURRICANE", EVTYPE)) %>%
+  mutate(EVTYPE = ifelse(grepl("\\bcurrent\\b", EVTYPE, ignore.case = TRUE), "CURRENT", EVTYPE)) %>%
+  mutate(EVTYPE = ifelse(grepl("\\blightning\\b", EVTYPE, ignore.case = TRUE), "LIGHTNING", EVTYPE)) %>%
+  mutate(EVTYPE = ifelse(grepl("\\bhail\\b", EVTYPE, ignore.case = TRUE), "HAIL", EVTYPE)) %>%
+  mutate(EVTYPE = ifelse(grepl("\\bwind", EVTYPE, ignore.case = TRUE), "WIND", EVTYPE)) %>%
+  mutate(EVTYPE = ifelse(grepl("\\bice\\b", EVTYPE, ignore.case = TRUE), "ICE/SNOW", EVTYPE)) %>%
+  mutate(EVTYPE = ifelse(grepl("\\bsnow\\b", EVTYPE, ignore.case = TRUE), "ICE/SNOW", EVTYPE)) %>%
+  mutate(EVTYPE = ifelse(grepl("\\bwinter\\b", EVTYPE, ignore.case = TRUE), "ICE/SNOW", EVTYPE)) %>%
+  mutate(EVTYPE = ifelse(grepl("\\bflood\\b", EVTYPE, ignore.case = TRUE), "FLOOD", EVTYPE)) %>%
+  mutate(EVTYPE = ifelse(grepl("\\bstorm\\b", EVTYPE, ignore.case = TRUE), "STORM", EVTYPE))
 
+#Determine total injuries and fatalities per category
 casualty_sums <- condenseddata %>%
   group_by(EVTYPE) %>%
   summarize(total_injuries = sum(INJURIES), total_fatalities = sum(FATALITIES))
 
+#Determine top 10 categories for injuries and fatalitites
 sorted_byinjury <- casualty_sums %>% arrange(desc(total_injuries))
 sorted_byfatality <- casualty_sums %>% arrange(desc(total_fatalities))
 
@@ -50,19 +75,75 @@ top10injuries <- sorted_byinjury$EVTYPE[1:10]
 top10fatalities <- sorted_byfatality$EVTYPE[1:10]
 top10both <- unique(c(as.character(top10fatalities), as.character(top10injuries)))
 
-subset <- casualty_sums[which(casualty_sums$EVTYPE %in% top10both),]
-meltedsubset <- melt(subset)
+injfatSubset <- casualty_sums[which(casualty_sums$EVTYPE %in% top10both),]
+injfatSubsetMelt <- melt(injfatSubset)
 
-g <- ggplot(meltedsubset, aes(x = reorder(EVTYPE, value), y= value, fill = variable), xlab="Event Type") +
+#Generate cash values and Calculate total cash damage
+returnCash <- function(dmg, exp){
+  cash <- as.numeric(dmg)
+  cash[exp=="1"] <- 10 * cash[exp=="1"]
+  cash[exp=="2"] <- 10^2 * cash[exp=="2"]
+  cash[exp=="3"] <- 10^3 * cash[exp=="3"]
+  cash[exp=="4"] <- 10^4 * cash[exp=="4"]
+  cash[exp=="5"] <- 10^5 * cash[exp=="5"]
+  cash[exp=="6"] <- 10^6 * cash[exp=="6"]
+  cash[exp=="7"] <- 10^7 * cash[exp=="7"]
+  cash[exp=="8"] <- 10^8 * cash[exp=="8"]
+  cash[exp=="B"] <- 10^9 * cash[exp=="B"]
+  cash[exp=="h"] <- 100 * cash[exp=="h"]
+  cash[exp=="H"] <- 100 * cash[exp=="H"]
+  cash[exp=="K"] <- 1000 * cash[exp=="K"]
+  cash[exp=="m"] <- 10^6 * cash[exp=="m"]
+  cash[exp=="M"] <- 10^6 * cash[exp=="M"]
+  return(cash)
+}
+
+condenseddata$TOTCASH <- with(condenseddata, returnCash(PROPDMG, PROPDMGEXP) + returnCash(CROPDMG, CROPDMGEXP))
+
+#Determine total cash damage per category
+totcash_sums <- condenseddata %>%
+  group_by(EVTYPE) %>%
+  summarize(sumTotalCash = sum(TOTCASH))
+
+#Determine top 10 total cash damage categories
+sorted_bycashdmg <- totcash_sums %>% arrange(desc(sumTotalCash))
+
+top10cashdmg <- sorted_bycashdmg$EVTYPE[1:10]
+
+cashSubset <- totcash_sums[which(totcash_sums$EVTYPE %in% top10cashdmg),]
+cashSubsetMelt <- melt(cashSubset)
+```
+
+## Results
+
+The top 10 categories were used to represent the data for each of the graphs below.
+
+
+1- Tornados cause the most number of injuries and fatalities compared to any other type of weather event. The number of injuries for the Tornado category was so high (over 91,000 injuries) that the y-axis of the injuries graph below has been limited to a maximum of 12,000 in order to avoid a severely truncated.
+
+2- Floods caused the most amount of economical damage compared to any other type of weather event as shown in the 2nd graph below.
+
+```{r results-plotting}
+#Plot total injuries and fatalities per modified category type
+ggplot(injfatSubsetMelt, aes(x = reorder(EVTYPE, value), y= value, fill = variable), xlab="Event Type") +
   geom_bar(stat="identity", width=.5, position = "dodge") +
-  coord_cartesian(ylim=c(0, 7500)) +
-  ggtitle("Most harmful events") +
+  coord_cartesian(ylim=c(0, 12000)) +
+  ggtitle("Most harmful events to population health") +
   ylab("Number of people") +
   xlab("Event Type") +
   scale_fill_discrete(name = "Casualty Type", labels = c("Total Injuries", "Total Fatalities")) +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  scale_y_continuous(breaks = seq(0,7500,1000))
+  scale_y_continuous(breaks = seq(0,12000,1000))
 
+ggplot(cashSubsetMelt, aes(x = reorder(EVTYPE, value), y= value/(10^6)), xlab="Event Type") +
+  geom_bar(stat="identity", width=.5, position = "dodge") +
+  #coord_cartesian(ylim=c(0, 12000)) +
+  ggtitle("Most economically damaging events") +
+  ylab("Millions of Dollars in Total Damage") +
+  xlab("Event Type") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  scale_y_continuous(breaks = seq(0,250000,10000))
 ```
 
